@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scientific Report Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script>
+        // Set worker properly
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    </script>
+    
+    <style>
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+        .typing-dot { animation: typing 1.4s infinite ease-in-out both; }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes typing { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 font-sans">
+
+    <!-- Navbar -->
+    <nav class="bg-white border-b border-slate-200 sticky top-0 z-50 px-4 py-3 shadow-sm">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="bg-blue-600 text-white p-2 rounded-lg">
+                    <i class="fas fa-microscope text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight">Nova Mentor</h1>
+                    <p class="text-xs text-slate-500">Scientific Report Assistant</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-4">
+                <div class="bg-slate-100 flex items-center px-3 py-1.5 rounded-md border border-slate-200">
+                    <span class="text-xs font-semibold text-slate-500 mr-2">STUDENT</span>
+                    <input type="text" id="studentName" placeholder="Enter Name..." class="bg-transparent border-none text-sm focus:ring-0 w-32 font-medium text-slate-700">
+                </div>
+                <button id="saveWorkBtn" class="text-slate-500 hover:text-blue-600 transition-colors" title="Save Progress">
+                    <i class="fas fa-save"></i>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-80px)]">
+        
+        <!-- Left: Navigation / Rubric -->
+        <aside class="lg:col-span-3 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden h-full">
+            <div class="p-4 border-b border-slate-100 bg-slate-50">
+                <h2 class="font-bold text-slate-700 flex items-center gap-2">
+                    <i class="fas fa-list-check text-blue-500"></i> Criteria
+                </h2>
+            </div>
+            <div id="criteriaList" class="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+                <!-- Injected via JS -->
+            </div>
+        </aside>
+
+        <!-- Center: Workspace -->
+        <section class="lg:col-span-6 flex flex-col gap-4 h-full">
+            
+            <!-- Upload Area -->
+            <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200 flex-shrink-0 transition-all" id="uploadCard">
+                <h2 class="font-bold text-slate-800 mb-2 flex items-center gap-2">
+                    <i class="fas fa-robot text-purple-600"></i> AI Draft Review
+                </h2>
+                <div class="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:bg-slate-50 transition-colors relative group cursor-pointer">
+                    <input type="file" id="fileInput" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept=".txt,.docx,.pdf">
+                    <div id="uploadPlaceholder">
+                        <i class="fas fa-cloud-upload-alt text-3xl text-slate-400 mb-2 group-hover:text-blue-500 transition-colors"></i>
+                        <p class="text-sm font-medium text-slate-600">Click to upload draft (.docx, .pdf)</p>
+                        <p class="text-xs text-slate-400">Get instant gap analysis feedback</p>
+                    </div>
+                    
+                    <!-- Progress State -->
+                    <div id="uploadProgress" class="hidden absolute inset-0 bg-white flex flex-col items-center justify-center p-4">
+                        <div class="w-full max-w-xs space-y-3">
+                            <div class="flex justify-between text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                                <span id="progressText">Initializing...</span>
+                                <span id="progressPercent">0%</span>
+                            </div>
+                            <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                                <div id="progressBar" class="h-full bg-blue-500 w-0 transition-all duration-300 ease-out"></div>
+                            </div>
+                            <p class="text-xs text-slate-400 text-center animate-pulse" id="progressDetail">Please wait...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analysis Results -->
+            <div id="analysisResults" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 flex-1 overflow-hidden flex flex-col relative">
+                <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-purple-50">
+                    <h3 class="font-bold text-purple-900 flex items-center gap-2">
+                        <i class="fas fa-magic"></i> Review Results
+                    </h3>
+                    <button onclick="resetUpload()" class="text-xs bg-white border border-purple-200 text-purple-700 px-2 py-1 rounded hover:bg-white/80">
+                        Upload New
+                    </button>
+                </div>
+                <div id="resultsContent" class="flex-1 overflow-y-auto p-6 custom-scrollbar prose prose-sm max-w-none text-slate-700">
+                    <!-- Results Go Here -->
+                </div>
+            </div>
+
+            <!-- Editor (Only shows if no analysis active) -->
+            <div id="mainEditor" class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 flex flex-col overflow-hidden">
+                <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                    <div>
+                        <span class="text-xs font-bold text-blue-600 uppercase" id="currentSectionCode">SEC 1</span>
+                        <h2 class="font-bold text-slate-800" id="currentSectionName">Introduction</h2>
+                    </div>
+                    <span class="bg-white border border-slate-200 text-slate-600 text-xs font-bold px-2 py-1 rounded shadow-sm" id="currentMarks">7 Marks</span>
+                </div>
+                <textarea id="editorText" class="flex-1 p-4 resize-none focus:outline-none text-slate-700 leading-relaxed font-serif" placeholder="Start writing here..."></textarea>
+                <div class="p-3 border-t border-slate-100 bg-slate-50 flex justify-between">
+                    <button class="text-slate-500 hover:text-blue-600 text-sm font-medium" id="prevBtn"><i class="fas fa-chevron-left"></i> Prev</button>
+                    <button class="text-white bg-blue-600 hover:bg-blue-700 px-4 py-1.5 rounded text-sm font-medium shadow-sm transition-transform active:scale-95" id="nextBtn">Next <i class="fas fa-chevron-right ml-1"></i></button>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Right: Chat -->
+        <aside class="lg:col-span-3 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-full overflow-hidden">
+            <div class="p-4 border-b border-slate-100 bg-slate-50">
+                <h2 class="font-bold text-slate-700 flex items-center gap-2">
+                    <i class="fas fa-comment-dots text-green-500"></i> Nova Chat
+                </h2>
+            </div>
+            <div id="chatContainer" class="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-slate-50/50">
+                <!-- Messages -->
+            </div>
+            <div class="p-3 border-t border-slate-200 bg-white">
+                <div class="flex gap-2">
+                    <input type="text" id="chatInput" class="flex-1 bg-slate-100 border-none rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all" placeholder="Ask for help...">
+                    <button id="sendChat" class="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 transition-colors">
+                        <i class="fas fa-paper-plane text-sm"></i>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+    </main>
+
+    <script>
+        // --- 1. CONFIGURATION & DATA ---
+        
+        const SECTIONS = [
+            {
+                id: 'intro', title: '1. Introduction', marks: 7,
+                criteria: [
+                    'C1.1: State Aim (1m)', 'C1.2: State Hypothesis (1m)', 
+                    'C1.3: Identify Variables (1m)', 'C1.4: Pathogen Details + Ref (2m)', 
+                    'C1.5: Growth Factors + Ref (2m)'
+                ],
+                desc: "Aim, Hypothesis, Micro-organism info."
+            },
+            {
+                id: 'methods', title: '2. Materials & Methods', marks: 7,
+                criteria: ['C2.1: Materials List (2m)', 'C2.2: Step-by-Step Method (3m)', 'C2.3: Labelled Photo (2m)'],
+                desc: "Equipment, detailed steps, accuracy."
+            },
+            {
+                id: 'results', title: '3. Results & Analysis', marks: 7,
+                criteria: ['C3.1: Raw Data Table (1m)', 'C3.2: Calculations (2m)', 'C3.3: Summary Table (1m)', 'C3.4: Graphs (1m)', 'C3.5: Analysis Text (2m)'],
+                desc: "Data, tables, graphs, trends."
+            },
+            {
+                id: 'discuss', title: '4. Discussion', marks: 10,
+                criteria: ['C4.1: Explanation (3m)', 'C4.2: Errors (2m)', 'C4.3: Improvements (2m)', 'C4.4: Disease Link (2m)', 'C4.5: Conclusion (1m)'],
+                desc: "Interpret results, evaluate setup."
+            },
+            {
+                id: 'ref', title: '5. References', marks: 2,
+                criteria: ['C5.1: Reference List (1m)', 'C5.2: Evaluate Sources (1m)'],
+                desc: "Citations and bibliography."
+            }
+        ];
+
+        let state = {
+            currentSection: 0,
+            content: {},
+            chatHistory: [],
+            studentName: ''
+        };
+
+        // --- 2. INITIALIZATION ---
+
+        document.addEventListener('DOMContentLoaded', () => {
+            renderSidebar();
+            updateSectionView();
+            addSystemMessage("Hello! I'm ready to review your draft. Upload a PDF/Docx or start typing.");
+            
+            // Listeners
+            document.getElementById('fileInput').addEventListener('change', handleFile);
+            document.getElementById('prevBtn').addEventListener('click', () => nav(-1));
+            document.getElementById('nextBtn').addEventListener('click', () => nav(1));
+            document.getElementById('sendChat').addEventListener('click', sendChat);
+            document.getElementById('chatInput').addEventListener('keyup', (e) => e.key === 'Enter' && sendChat());
+            document.getElementById('studentName').addEventListener('input', (e) => state.studentName = e.target.value);
+            
+            recoverState();
+        });
+
+        // --- 3. CORE FUNCTIONS ---
+
+        function renderSidebar() {
+            const list = document.getElementById('criteriaList');
+            list.innerHTML = SECTIONS.map((sec, i) => `
+                <div class="p-3 rounded-lg cursor-pointer transition-all hover:bg-white border hover:border-blue-200 border-transparent ${i === state.currentSection ? 'bg-white border-blue-500 shadow-sm' : 'opacity-70'}"
+                     onclick="goToSection(${i})">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="font-bold text-xs text-slate-600 uppercase">Section ${i+1}</span>
+                        <span class="bg-slate-100 text-slate-500 text-[10px] font-bold px-1.5 py-0.5 rounded">${sec.marks}m</span>
+                    </div>
+                    <div class="font-semibold text-sm text-slate-800 leading-tight">${sec.title}</div>
+                    <div class="mt-2 text-[10px] text-slate-400 truncate">${sec.criteria.join(', ')}</div>
+                </div>
+            `).join('');
+        }
+
+        function updateSectionView() {
+            const sec = SECTIONS[state.currentSection];
+            document.getElementById('currentSectionName').innerText = sec.title;
+            document.getElementById('currentMarks').innerText = `${sec.marks} Marks`;
+            document.getElementById('currentSectionCode').innerText = `SECTION ${state.currentSection + 1}`;
+            document.getElementById('editorText').value = state.content[sec.id] || '';
+            renderSidebar();
+        }
+
+        function goToSection(idx) {
+            // Save current
+            state.content[SECTIONS[state.currentSection].id] = document.getElementById('editorText').value;
+            state.currentSection = idx;
+            updateSectionView();
+            saveState();
+        }
+
+        function nav(dir) {
+            const next = state.currentSection + dir;
+            if (next >= 0 && next < SECTIONS.length) goToSection(next);
+        }
+
+        // --- 4. ROBUST FILE PROCESSING (THE FIX) ---
+
+        async function handleFile(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const ui = {
+                placeholder: document.getElementById('uploadPlaceholder'),
+                progress: document.getElementById('uploadProgress'),
+                bar: document.getElementById('progressBar'),
+                text: document.getElementById('progressText'),
+                detail: document.getElementById('progressDetail')
+            };
+
+            // Switch to progress view
+            ui.placeholder.classList.add('hidden');
+            ui.progress.classList.remove('hidden');
+
+            const setProgress = (percent, msg) => {
+                ui.bar.style.width = `${percent}%`;
+                ui.text.innerHTML = `${percent}%`;
+                ui.detail.innerText = msg;
+            };
+
+            try {
+                // Step 1: Read
+                setProgress(10, "Reading file...");
+                const text = await readFileSafe(file);
+                
+                // Step 2: Validate
+                setProgress(40, "Verifying content...");
+                if (!text || text.length < 50) throw new Error("File content is too short or empty.");
+
+                // Step 3: Analyze
+                setProgress(60, "Analyzing with AI...");
+                const analysisHTML = await performAIAnalysis(text, file.name);
+
+                // Step 4: Complete
+                setProgress(100, "Done!");
+                setTimeout(() => {
+                    showAnalysisResults(analysisHTML);
+                    ui.progress.classList.add('hidden');
+                    ui.placeholder.classList.remove('hidden'); // Reset for next time
+                    document.getElementById('fileInput').value = '';
+                }, 800);
+
+            } catch (err) {
+                console.error(err);
+                alert(`Error: ${err.message}`);
+                ui.progress.classList.add('hidden');
+                ui.placeholder.classList.remove('hidden');
+                document.getElementById('fileInput').value = '';
+            }
+        }
+
+        function readFileSafe(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                const ext = file.name.split('.').pop().toLowerCase();
+
+                reader.onerror = () => reject(new Error("Failed to read file"));
+                
+                if (ext === 'txt') {
+                    reader.onload = e => resolve(e.target.result);
+                    reader.readAsText(file);
+                } 
+                else if (ext === 'docx') {
+                    if (typeof mammoth === 'undefined') return reject(new Error("Mammoth library failed to load"));
+                    reader.onload = e => {
+                        mammoth.extractRawText({ arrayBuffer: e.target.result })
+                            .then(res => resolve(res.value))
+                            .catch(err => reject(new Error("Docx parsing failed: " + err.message)));
+                    };
+                    reader.readAsArrayBuffer(file);
+                } 
+                else if (ext === 'pdf') {
+                    if (typeof pdfjsLib === 'undefined') return reject(new Error("PDF library failed to load"));
+                    reader.onload = async (e) => {
+                        try {
+                            const pdf = await pdfjsLib.getDocument(new Uint8Array(e.target.result)).promise;
+                            let fullText = '';
+                            for (let i = 1; i <= pdf.numPages; i++) {
+                                const page = await pdf.getPage(i);
+                                const content = await page.getTextContent();
+                                fullText += content.items.map(item => item.str).join(' ') + '\n';
+                            }
+                            resolve(fullText);
+                        } catch (err) {
+                            reject(new Error("PDF parsing failed: " + err.message));
+                        }
+                    };
+                    reader.readAsArrayBuffer(file);
+                } 
+                else {
+                    reject(new Error("Unsupported file format"));
+                }
+            });
+        }
+
+        async function performAIAnalysis(text, filename) {
+            // PROMPT ENGINEERING FOR GAP ANALYSIS
+            const systemPrompt = `You are Nova Mentor, an expert scientific report assessor. 
+            Perform a RIGOROUS GAP ANALYSIS on the student report provided.
+            
+            Structure Checklist:
+            ${JSON.stringify(SECTIONS.map(s => s.criteria))}
+
+            Instructions:
+            1. Return ONLY raw HTML.
+            2. For EACH criterion, create a <div> card.
+            3. If the student Met the criteria: Use <span class="text-green-600 font-bold">MET</span>.
+            4. If the student Missed/Partially Met: Use <span class="text-red-600 font-bold">GAP DETECTED</span> and provide a <blockquote> with specific actionable advice.
+            5. Start with a <h3>Summary</h3>.
+            `;
+            
+            const userContent = `File: ${filename}\n\nReport Content:\n${text.substring(0, 15000)}`; // Truncate limit
+
+            // Fallback for when call_llm is missing (Mock Mode for Standard Browsers)
+            if (!window.call_llm) {
+                console.warn("window.call_llm missing. Using mock response.");
+                await new Promise(r => setTimeout(r, 2000)); // Simulate delay
+                return `
+                    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
+                        <h3 class="font-bold text-yellow-800">Demo Environment Detected</h3>
+                        <p class="text-sm text-yellow-700">The AI bridge is not connected. Here is a sample simulation of what the output would look like based on your file "${filename}".</p>
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-800 mb-4">Analysis Summary</h3>
+                    <p class="mb-6">The report shows a good attempt at the Introduction but lacks specific details in the Methods section regarding quantities.</p>
+                    
+                    <div class="space-y-4">
+                        <div class="p-4 bg-slate-50 border border-slate-200 rounded-lg">
+                            <h4 class="font-bold text-slate-700">C1.1: State Aim</h4>
+                            <div class="mt-2"><span class="text-green-600 font-bold"><i class="fas fa-check"></i> MET</span></div>
+                            <p class="text-sm text-slate-600 mt-1">"The aim was effectively stated in paragraph 1."</p>
+                        </div>
+                         <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
+                            <h4 class="font-bold text-slate-700">C2.1: Materials List</h4>
+                            <div class="mt-2"><span class="text-red-600 font-bold"><i class="fas fa-exclamation-circle"></i> GAP DETECTED</span></div>
+                            <blockquote class="border-l-4 border-red-300 pl-3 mt-2 text-sm text-slate-600 italic">
+                                "You listed 'beakers' but did not specify the size (e.g., 250ml). Precision is key for repeatability."
+                            </blockquote>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Real Call
+            const response = await window.call_llm(systemPrompt, [{ role: 'user', content: userContent }]);
+            // Handle if response is JSON or object
+            if (typeof response === 'object' && response.detailed_html_report) return response.detailed_html_report;
+            if (typeof response === 'string') return response;
+            return "<div>Error: Unexpected response format from AI.</div>";
+        }
+
+        function showAnalysisResults(html) {
+            document.getElementById('uploadCard').classList.add('hidden');
+            document.getElementById('mainEditor').classList.add('hidden');
+            const resDiv = document.getElementById('analysisResults');
+            resDiv.classList.remove('hidden');
+            document.getElementById('resultsContent').innerHTML = html;
+        }
+
+        function resetUpload() {
+            document.getElementById('analysisResults').classList.add('hidden');
+            document.getElementById('mainEditor').classList.remove('hidden');
+            document.getElementById('uploadCard').classList.remove('hidden');
+        }
+
+        // --- 5. CHAT FUNCTIONS ---
+
+        function addSystemMessage(text) {
+            const div = document.createElement('div');
+            div.className = "flex justify-start animate__animated animate__fadeIn";
+            div.innerHTML = `<div class="bg-blue-50 text-blue-800 text-sm px-3 py-2 rounded-lg rounded-tl-none max-w-[85%] border border-blue-100">${text}</div>`;
+            document.getElementById('chatContainer').appendChild(div);
+            scrollToBottom();
+            state.chatHistory.push({role: 'assistant', content: text});
+        }
+
+        function addUserMessage(text) {
+            const div = document.createElement('div');
+            div.className = "flex justify-end animate__animated animate__fadeIn";
+            div.innerHTML = `<div class="bg-blue-600 text-white text-sm px-3 py-2 rounded-lg rounded-tr-none max-w-[85%] shadow-sm">${text}</div>`;
+            document.getElementById('chatContainer').appendChild(div);
+            scrollToBottom();
+            state.chatHistory.push({role: 'user', content: text});
+        }
+
+        async function sendChat() {
+            const input = document.getElementById('chatInput');
+            const txt = input.value.trim();
+            if (!txt) return;
+
+            addUserMessage(txt);
+            input.value = '';
+
+            // Loading bubble
+            const loader = document.createElement('div');
+            loader.id = 'chatLoader';
+            loader.className = "flex justify-start";
+            loader.innerHTML = `<div class="bg-slate-100 px-4 py-2 rounded-full flex gap-1"><div class="w-1.5 h-1.5 bg-slate-400 rounded-full typing-dot"></div><div class="w-1.5 h-1.5 bg-slate-400 rounded-full typing-dot"></div><div class="w-1.5 h-1.5 bg-slate-400 rounded-full typing-dot"></div></div>`;
+            document.getElementById('chatContainer').appendChild(loader);
+            scrollToBottom();
+
+            try {
+                let reply;
+                if (!window.call_llm) {
+                    await new Promise(r => setTimeout(r, 1500));
+                    reply = "I'm in demo mode, but I hear you! Once connected, I'll answer that in detail.";
+                } else {
+                     const prompt = `You are Nova. Helpful, encouraging. User: ${state.studentName}. Context: Discussing scientific report.`;
+                     const res = await window.call_llm(prompt, state.chatHistory.slice(-4));
+                     reply = typeof res === 'string' ? res : res.response || "I couldn't generate a response.";
+                }
+                
+                document.getElementById('chatLoader').remove();
+                addSystemMessage(reply);
+
+            } catch (err) {
+                document.getElementById('chatLoader').remove();
+                addSystemMessage("Error: " + err.message);
+            }
+        }
+
+        function scrollToBottom() {
+            const c = document.getElementById('chatContainer');
+            c.scrollTop = c.scrollHeight;
+        }
+
+        // --- 6. UTILS ---
+        function saveState() {
+            state.content[SECTIONS[state.currentSection].id] = document.getElementById('editorText').value;
+            localStorage.setItem('novaState', JSON.stringify(state));
+        }
+        function recoverState() {
+            const s = JSON.parse(localStorage.getItem('novaState'));
+            if (s) {
+                state = { ...state, ...s };
+                document.getElementById('studentName').value = state.studentName || '';
+                updateSectionView();
+            }
+        }
+        document.getElementById('saveWorkBtn').onclick = () => {
+            saveState();
+            alert("Progress saved to browser!");
+        }
+
+    </script>
+</body>
+</html>
